@@ -1,0 +1,18 @@
+LoL Quiz Assistant Gemini server: http://localhost:8787
+Modelos: gemini-3.5-flash-lite, gemini-3.8-flash
+[10:07:11 a. m.] POST /answer
+Pregunta: 1 Zn + 1 Au(NO­2)2 → 1 Zn(NO2)2 + 1 Au
+Opciones: a. Single replacement | Single replacement | b. Double replacement | Double replacement | c. Synthesis | Synthesis | d. Acid-base | Acid-base | e. Decomposition | Decomposition | f. Combustion | Combustion
+Gemini => a. Single replacement (100%)
+[10:07:26 a. m.] POST /answer
+Pregunta: 2 KOH + 1 H2SO4 → 1 K2SO4 + 2 H2O
+Opciones: a. Single replacement | Single replacement | b. Double replacement | Double replacement | c. Synthesis | Synthesis | d. Acid-base | Acid-base | e. Decomposition | Decomposition | f. Combustion | Combustion
+Gemini => d. Acid-base (100%)
+[10:07:35 a. m.] POST /answer
+Pregunta: 1 BaS + 1 PtCl2 → 1 BaCl2 + 1 PtS
+Opciones: a. Single replacement | Single replacement | b. Double replacement | Double replacement | c. Synthesis | Synthesis | d. Acid-base | Acid-base | e. Decomposition | Decomposition | f. Combustion | Combustion
+Gemini => b. Double replacement (100%)
+[10:09:36 a. m.] POST /answer
+Pregunta: 3 HNO3 + 1 Fe(OH)3 → 3 H2O + 1 Fe(NO3)3
+Opciones: a. Single replacement | Single replacement | b. Double replacement | Double replacement | c. Synthesis | Synthesis | d. Acid-base | Acid-base | e. Decomposition | Decomposition | f. Combustion | Combustion
+Gemini => d. Acid-base (100%)

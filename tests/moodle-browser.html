@@ -1,0 +1,178 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Real Moodle keyboard integration</title>
+<link rel="stylesheet" href="__STYLE_URL__">
+<form id="responseform"><div id="fixture"></div><button type="submit">Check</button></form>
+<pre id="results">RUNNING</pre>
+<script>
+  // Make jQuery animations advance under Edge's headless virtual clock.
+  window.requestAnimationFrame = (callback) => setTimeout(() => callback(performance.now()),16);
+  window.cancelAnimationFrame = clearTimeout;
+  window.testErrors = [];
+  window.addEventListener('error',(event) => testErrors.push(event.message));
+</script>
+<script src="__JQUERY_URL__"></script>
+<script>
+  let captured, nextResponse, submitted = false, dirty = false, serial = 0, requests = 0;
+  document.getElementById('responseform').addEventListener('submit', (event) => {event.preventDefault(); submitted = true;});
+  window.chrome = {runtime:{id:'test-extension',onMessage:{addListener(){}},sendMessage(message, callback){
+    if (message.type === 'LOL_ASSISTANT_GET_SETTINGS') callback({settings:{showOverlay:true,showExplanation:true}});
+    if (message.type === 'LOL_ASSISTANT_QUESTION') { requests++; captured = message.payload; callback({result:nextResponse(message.payload)}); }
+  }}};
+  window.M = {util:{js_pending(){},js_complete(){}}};
+  window.define = (_dependencies,factory) => {
+    window.moodleDdwtos = factory(jQuery, {}, {space:32,arrowRight:39,arrowDown:40,arrowLeft:37,arrowUp:38,escape:27},
+      {markFormAsDirty(){dirty=true;}}, {eventTypes:{filterContentRenderingComplete:'filter-complete'}});
+  };
+</script>
+<script src="__MOODLE_URL__"></script>
+<script src="__CONTENT_URL__"></script>
+<script>
+(async () => {
+  const results = [], fixture = document.getElementById('fixture');
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve,ms));
+  function assert(value,message) { if (!value) throw new Error(message); }
+  async function test(name,fn) {
+    try { await fn(); results.push('PASS ' + name); }
+    catch (error) { results.push('FAIL ' + name + ': ' + error.message + (testErrors.length ? ' | ' + testErrors.join('; ') : '')); }
+    document.getElementById('results').textContent = results.join('\n');
+  }
+  function createQuestion({choices=['Belfast','Glasgow','Cork','Derry','London','Cardiff','Dublin','Swansea','Edinburgh'],groups=[1,1,1,1,1],initial=[],infinite=false,readOnly=false} = {}) {
+    const id = 'question-test-' + (++serial);
+    const uniqueGroups = [...new Set(groups)];
+    const drags = uniqueGroups.map((group) => `<div class="draggrouphomes${group}">${choices.map((text,index) =>
+      `<span class="draghome unplaced choice${index+1} group${group}${infinite?' infinite':''}" style="left:0;top:0">${text}</span>`).join('')}</div>`).join('');
+    fixture.innerHTML = `<div id="${id}" class="que ddwtos"><div class="formulation"><div class="qtext"><p>Match the capitals:</p>${groups.map((group,index) =>
+      `<p>Country ${index+1}: <span class="drop active place${index+1} group${group}" tabindex="0">&nbsp;</span></p>`).join('')}</div><div class="answercontainer">${drags}</div>${groups.map((group,index) =>
+      `<input type="hidden" id="${id}-p${index+1}" class="placeinput place${index+1} group${group}" name="q:p${index+1}" value="${initial[index]||0}">`).join('')}</div></div>`;
+    moodleDdwtos.init(id,readOnly);
+    return document.getElementById(id);
+  }
+  function request(root, texts, code = 'KeyL') {
+    document.getElementById('lol-assistant-overlay')?.remove();
+    nextResponse = (payload) => ({answer:'Resolved',confidence:1,assignments:payload.slots.map((slot,index) => {
+      const option = slot.options.find((item) => item.text === texts[index]);
+      assert(option, 'missing option ' + texts[index]);
+      return {slotId:slot.id,...option};
+    })});
+    root.querySelector('.qtext').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));
+    document.dispatchEvent(new KeyboardEvent('keydown',{code,altKey:true,bubbles:true}));
+  }
+  async function finished() {
+    for (let count=0; count<800; count++) {
+      const overlay = document.getElementById('lol-assistant-overlay');
+      if (overlay) return overlay.textContent;
+      await pause(25);
+    }
+    throw new Error('timeout waiting for completion');
+  }
+  function values(root) { return [...root.querySelectorAll('.placeinput')].map((input) => input.value).join(','); }
+  await test('five capitals fill actual Moodle inputs and visible placements without submitting', async () => {
+    const root = createQuestion();
+    dirty = false;
+    const initialView = root.textContent;
+    let intermediateKeys = 0, exposedMovement = false;
+    root.addEventListener('keydown', () => {
+      intermediateKeys++;
+      const snapshot = document.querySelector('[data-lol-assistant-snapshot]');
+      if (!snapshot || snapshot.textContent !== initialView || getComputedStyle(root).opacity !== '0') exposedMovement = true;
+    });
+    request(root,['London','Cardiff','Edinburgh','Dublin','Belfast']);
+    const snapshot = document.querySelector('[data-lol-assistant-snapshot]');
+    assert(snapshot && snapshot.inert && snapshot.getAttribute('aria-hidden') === 'true','missing inert static view');
+    assert(!snapshot.querySelector('[id], [name], .drop, .draghome'), 'static view conflicts with live question');
+    const report = await finished();
+    assert(values(root) === '5,6,9,7,1', 'wrong saved values: ' + values(root));
+    assert(root.querySelectorAll('.draghome.placed').length === 5,'missing visible placements');
+    assert(report.includes('Espacios completados'), 'not confirmed: ' + report);
+    assert(dirty && !submitted,'form state or submission error');
+    assert(intermediateKeys > 5 && !exposedMovement,'intermediate options were visible');
+    assert(!document.querySelector('[data-lol-assistant-snapshot]') && root.style.opacity === '', 'view was not restored');
+  });
+  await test('previously placed words are captured and swapped correctly', async () => {
+    const root = createQuestion({choices:['London','Cardiff'],groups:[1,1],initial:[2,1]});
+    root.style.setProperty('opacity','0.85','important');
+    await pause(300);
+    request(root,['London','Cardiff']);
+    const report = await finished();
+    assert(captured.slots.length === 2, 'hidden drops were lost');
+    assert(!captured.question.includes('London'), 'placed words leaked into question');
+    assert(values(root) === '1,2', 'swap failed: ' + values(root));
+    assert(report.includes('Espacios completados'), 'swap unconfirmed');
+    assert(root.style.opacity === '0.85' && root.style.getPropertyPriority('opacity') === 'important','original style not restored');
+  });
+  await test('reusable words and separate groups use the correct Moodle numbers', async () => {
+    const root = createQuestion({choices:['London','Cardiff'],groups:[1,1,2],infinite:true});
+    request(root,['London','London','Cardiff']);
+    const report = await finished();
+    assert(values(root) === '1,1,2','reusable/group mapping failed: ' + values(root));
+    assert(report.includes('Espacios completados'), 'reusable placements unconfirmed');
+  });
+  await test('readonly questions keep their values and show the guide', async () => {
+    const root = createQuestion({choices:['London','Cardiff'],groups:[1,1],readOnly:true});
+    request(root,['London','Cardiff']);
+    const report = await finished();
+    assert(values(root) === '0,0','readonly answer changed');
+    assert(report.includes('Arrastra'), 'no manual guide');
+  });
+  await test('Alt+N fills exactly one Moodle space per press using one Gemini reply', async () => {
+    const root = createQuestion();
+    const texts = ['London','Cardiff','Edinburgh','Dublin','Belfast'];
+    const expected = [5,6,9,7,1];
+    const before = requests;
+    for (let index=0; index<texts.length; index++) {
+      request(root,texts,'KeyN');
+      // Both auto-repeat and another press while busy must leave the current step alone.
+      document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyN',altKey:true,repeat:true,bubbles:true}));
+      document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyN',altKey:true,bubbles:true}));
+      const report = await finished();
+      assert(values(root) === expected.map((value,position) => position<=index?value:0).join(','),'advanced more than one space: '+values(root));
+      assert(report.includes(`Paso ${index+1}/5: ${texts[index]}`),'wrong progress: '+report);
+      assert(!texts.slice(index+1).some((text) => report.includes(text)),'future answers were revealed');
+      assert(!document.querySelector('[data-lol-assistant-snapshot]'),'view remains frozen');
+    }
+    request(root,texts,'KeyN');
+    assert((await finished()).includes('Pregunta completada: 5/5'),'missing final status');
+    assert(requests === before+1,'requested Gemini for every step');
+  });
+  await test('Alt+N handles numeric dropdowns and full mode can finish the rest', async () => {
+    const select = '<select><option value="">Choose...</option><option>1</option><option>2</option><option>3</option></select>';
+    fixture.innerHTML = `<fieldset class="que"><div class="qtext"><p>Adult ${select}</p><p>Seed ${select}</p><p>Germination ${select}</p></div></fieldset>`;
+    const root = fixture.firstElementChild;
+    const before = requests;
+    request(root,['3','1','2'],'KeyN');
+    await finished();
+    assert([...root.querySelectorAll('select')].map((item)=>item.value).join(',')==='3,,','first step filled other dropdowns');
+    request(root,['3','1','2'],'KeyN');
+    await finished();
+    assert([...root.querySelectorAll('select')].map((item)=>item.value).join(',')==='3,1,','second step failed');
+    assert(requests===before+1,'dropdown steps were not cached');
+    request(root,['3','1','2']);
+    await finished();
+    assert([...root.querySelectorAll('select')].map((item)=>item.value).join(',')==='3,1,2','full mode failed after steps');
+    assert(requests===before+2,'full mode did not refresh analysis');
+  });
+  await test('manual changes invalidate cached steps without overwriting answers', async () => {
+    const select='<select><option value="">Choose...</option><option>1</option><option>2</option></select>';
+    fixture.innerHTML=`<fieldset class="que"><div class="qtext"><p>A ${select}</p><p>B ${select}</p></div></fieldset>`;
+    const root=fixture.firstElementChild;
+    request(root,['1','2'],'KeyN');
+    await finished();
+    root.querySelector('select').value='2';
+    request(root,['1','2'],'KeyN');
+    const report=await finished();
+    assert(report.includes('pregunta cambio'),'stale session was retained');
+    assert([...root.querySelectorAll('select')].map((item)=>item.value).join(',')==='2,','manual change was overwritten');
+  });
+  await test('missing Moodle handlers fall back to the guide without faking saved answers', async () => {
+    const root = createQuestion({choices:['London','Cardiff'],groups:[1,1]});
+    jQuery('body').off('keydown');
+    request(root,['London','Cardiff']);
+    const report = await finished();
+    assert(values(root) === '0,0','unhandled question was changed');
+    assert(report.includes('No se completaron todos'), 'missing fallback guide');
+    assert(!document.querySelector('[data-lol-assistant-snapshot]') && root.style.opacity === '', 'failed operation left the view hidden');
+  });
+  document.getElementById('results').textContent = results.join('\n') + '\n' + (results.some((line) => line.startsWith('FAIL'))?'TESTS_FAILED':'ALL_TESTS_PASSED');
+})().catch((error) => {document.getElementById('results').textContent = 'TESTS_FAILED ' + error.message;});
+</script>

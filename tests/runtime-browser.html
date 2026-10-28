@@ -1,0 +1,106 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Extension lifecycle regression tests</title>
+<pre id="results">RUNNING</pre>
+<script>
+(async () => {
+  const results = [];
+  function assert(condition,message) { if (!condition) throw new Error(message); }
+  async function test(name,run) {
+    try { await run(); results.push('PASS ' + name); }
+    catch (error) { results.push('FAIL ' + name + ': ' + error.message); }
+  }
+  async function create(mode) {
+    const frame = document.createElement('iframe');
+    const loaded = new Promise((resolve) => frame.onload = resolve);
+    const source = new URL('../content.js',location.href).href;
+    frame.srcdoc = `<fieldset><legend>Who uses a scythe?</legend><input type="text"></fieldset>
+      <script>
+        window.errors = []; window.questionRequests = 0; window.lastErrorReads = 0; window.pending = [];
+        window.addEventListener('error', (event) => errors.push(event.message));
+        let currentError = null;
+        window.chrome = {runtime:{id:'test-extension',onMessage:{addListener(){},removeListener(){}},
+          get lastError() { lastErrorReads++; return currentError; },
+          sendMessage(message,callback) {
+            if (${JSON.stringify(mode)} === 'startup-throw') throw new Error('Extension context invalidated.');
+            if (message.type === 'LOL_ASSISTANT_GET_SETTINGS') { callback({settings:{showOverlay:false,showExplanation:false}}); return; }
+            questionRequests++;
+            if (${JSON.stringify(mode)} === 'sync-throw') throw new Error('Extension context invalidated.');
+            if (${JSON.stringify(mode)} === 'callback-error') {
+              currentError = {message:'Extension context invalidated.'}; callback(); currentError = null; return;
+            }
+            if (${JSON.stringify(mode)} === 'late-callback') { pending.push(callback); return; }
+            callback({result:{answer:'Kayn',confidence:0.9}});
+          }
+        }};
+        if (${JSON.stringify(mode)} === 'missing-id') delete chrome.runtime.id;
+      <\/script><script src="${source}"><\/script>`;
+    document.body.append(frame);
+    await loaded;
+    return frame;
+  }
+  function analyze(frame) {
+    const win = frame.contentWindow, doc = win.document;
+    doc.querySelector('fieldset').dispatchEvent(new win.MouseEvent('mouseover',{bubbles:true}));
+    doc.dispatchEvent(new win.KeyboardEvent('keydown',{altKey:true,code:'KeyL',bubbles:true}));
+  }
+  function checkRecovery(frame) {
+    const win = frame.contentWindow;
+    assert(win.document.getElementById('lol-assistant-overlay')?.textContent.includes('Recarga esta pagina (F5)'), 'missing recovery message');
+    assert(win.errors.length === 0,'uncaught browser errors: ' + win.errors.join(';'));
+    assert(win.__lolQuizAssistantLoaded === false,'stale loaded marker retained');
+  }
+  for (const mode of ['startup-throw','missing-id','sync-throw','callback-error']) {
+    await test(mode + ' is handled and detaches obsolete hotkeys', async () => {
+      const frame = await create(mode);
+      analyze(frame);
+      checkRecovery(frame);
+      const calls = frame.contentWindow.questionRequests;
+      analyze(frame);
+      assert(frame.contentWindow.questionRequests === calls,'obsolete hotkey still sends messages');
+      assert(frame.contentWindow.document.querySelector('input').value === '', 'changed answer after invalidation');
+      frame.remove();
+    });
+  }
+  await test('late callbacks after reload cannot apply answers', async () => {
+    const frame = await create('late-callback');
+    analyze(frame);
+    const win = frame.contentWindow;
+    delete win.chrome.runtime.id;
+    win.pending[0]({result:{answer:'Kayn',confidence:0.9}});
+    checkRecovery(frame);
+    assert(win.document.querySelector('input').value === '', 'late result was applied');
+    frame.remove();
+  });
+  await test('healthy messaging still fills an answer and consumes lastError', async () => {
+    const frame = await create('normal');
+    analyze(frame);
+    assert(frame.contentWindow.document.querySelector('input').value === 'Kayn', 'healthy reply failed');
+    assert(frame.contentWindow.lastErrorReads === 2, 'lastError not consumed on every callback');
+    assert(frame.contentWindow.errors.length === 0, 'healthy messaging threw');
+    frame.remove();
+  });
+  await test('a fresh script can replace a disposed instance without duplicate requests', async () => {
+    const frame = await create('sync-throw');
+    analyze(frame);
+    checkRecovery(frame);
+    const win = frame.contentWindow;
+    win.chrome.runtime.sendMessage = (message,callback) => {
+      if (message.type === 'LOL_ASSISTANT_GET_SETTINGS') callback({settings:{showOverlay:false,showExplanation:false}});
+      else {win.questionRequests++; callback({result:{answer:'Kayn',confidence:0.9}});}
+    };
+    const script = win.document.createElement('script');
+    const loaded = new Promise((resolve) => script.onload = resolve);
+    script.src = new URL('../content.js',location.href).href;
+    win.document.body.append(script);
+    await loaded;
+    const before = win.questionRequests;
+    analyze(frame);
+    assert(win.questionRequests === before + 1, 'duplicate or missing listener');
+    assert(win.document.querySelector('input').value === 'Kayn','fresh instance failed');
+    assert(win.errors.length === 0, 'reinjection error');
+    frame.remove();
+  });
+  document.getElementById('results').textContent = results.join('\n') + '\n' + (results.some((line) => line.startsWith('FAIL'))?'TESTS_FAILED':'ALL_TESTS_PASSED');
+})().catch((error) => {document.getElementById('results').textContent='TESTS_FAILED ' + error.message;});
+</script>

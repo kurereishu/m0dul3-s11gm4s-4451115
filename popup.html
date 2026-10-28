@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LoL Quiz Assistant</title>
+    <style>
+      body {
+        box-sizing: border-box;
+        width: 260px;
+        margin: 0;
+        padding: 14px;
+        background: #101820;
+        color: #f8f3df;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 15px;
+      }
+
+      label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+
+      button {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #d4af37;
+        border-radius: 8px;
+        background: #172431;
+        color: #f8f3df;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .hint {
+        margin-top: 10px;
+        color: #c8b46c;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LoL Quiz Assistant</h1>
+    <label>
+      <input id="showOverlay" type="checkbox">
+      Mostrar resultado
+    </label>
+    <label>
+      <input id="showExplanation" type="checkbox">
+      Mostrar justificación
+    </label>
+    <button id="analyze" type="button">Analizar pestaña</button>
+    <div class="hint">Atajos: Alt + S para área, Alt + L para completar la pregunta y Alt + N para una respuesta por pulsación. También completan campos de escritura.</div>
+    <script src="popup.js"></script>
+  </body>
+</html>

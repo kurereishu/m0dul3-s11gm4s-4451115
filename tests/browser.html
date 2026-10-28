@@ -1,0 +1,161 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Pruebas de la extension</title>
+<style>.drop, [data-drop-slot] { display:inline-block; width:100px; height:24px; border:1px solid; }</style>
+<div id="fixture"></div>
+<pre id="results">RUNNING</pre>
+<script>
+  let captured, nextResponse;
+  window.chrome = { runtime: {
+    id: 'test-extension',
+    onMessage: { addListener() {} },
+    sendMessage(message, callback) {
+      if (message.type === 'LOL_ASSISTANT_GET_SETTINGS') callback({settings:{showOverlay:false,showExplanation:false}});
+      if (message.type === 'LOL_ASSISTANT_QUESTION') {
+        captured = message.payload;
+        callback({result: nextResponse(message.payload)});
+      }
+    }
+  }};
+</script>
+<script src="../content.js"></script>
+<script>
+  const results = [];
+  const fixture = document.getElementById('fixture');
+  function assert(condition, message) { if (!condition) throw new Error(message); }
+  function test(name, run) {
+    try { run(); results.push('PASS ' + name); }
+    catch (error) { results.push('FAIL ' + name + ': ' + error.message); }
+  }
+  function analyze(html, response, targetSelector = 'fieldset') {
+    fixture.innerHTML = html;
+    captured = null;
+    nextResponse = response;
+    fixture.querySelector(targetSelector).dispatchEvent(new MouseEvent('mouseover', {bubbles:true}));
+    document.dispatchEvent(new KeyboardEvent('keydown', {altKey:true, code:'KeyL', bubbles:true}));
+  }
+  function mapping(payload, values) {
+    return {answer:'Resuelto', confidence:0.9, assignments:payload.slots.map((slot, index) => {
+      const option = slot.options.find((item) => item.value === values[index]);
+      return {slotId:slot.id, ...option};
+    })};
+  }
+  const selectHtml = `<fieldset class="que"><div class="qtext">England and Scotland and
+    <select><option value="">Selecciona...</option><option value="w">Wales</option><option value="ni">Northern Ireland</option></select> form
+    <select><option value="">Selecciona...</option><option value="uk">United Kingdom</option><option value="gb">Great Britain</option></select>.</div></fieldset>`;
+  test('dropdowns collect the complete question and each option set, fire change events', () => {
+    let changes = 0;
+    fixture.addEventListener('change', () => changes++, {once:false});
+    analyze(selectHtml, (payload) => {
+      assert(payload.type === 'select_slots', 'wrong type');
+      assert(payload.question.includes('[slot-1]') && payload.question.includes('[slot-2]'), 'missing markers');
+      assert(!payload.question.includes('United Kingdom'), 'option bank leaked into question');
+      assert(payload.slots[0].options.length === 2, 'placeholder included');
+      assert(payload.slots[1].options[0].value === 'uk', 'lost distinct values');
+      return mapping(payload, ['w','gb']);
+    }, 'select');
+    assert([...fixture.querySelectorAll('select')].map((s) => s.value).join(',') === 'w,gb', 'fields not filled');
+    assert(changes === 2, 'missing change events');
+  });
+  test('invalid or incomplete assignment changes no dropdown', () => {
+    analyze(selectHtml, (payload) => ({...mapping(payload,['w','gb']), assignments:[mapping(payload,['w','gb']).assignments[0]]}));
+    assert([...fixture.querySelectorAll('select')].every((s) => s.value === ''), 'partial write');
+    analyze(selectHtml, (payload) => {
+      const result = mapping(payload,['w','gb']); result.assignments[1].value = 'bad'; return result;
+    });
+    assert([...fixture.querySelectorAll('select')].every((s) => s.value === ''), 'invalid write');
+  });
+  test('user changes while waiting are preserved', () => {
+    analyze(selectHtml, (payload) => {
+      fixture.querySelector('select').value = 'ni';
+      return mapping(payload,['w','gb']);
+    });
+    assert(fixture.querySelector('select').value === 'ni' && fixture.querySelectorAll('select')[1].value === '', 'overwrote user input');
+  });
+  test('ordering preserves row context and selects numeric positions', () => {
+    const select = '<select><option value="">Selecciona...</option><option>1</option><option>2</option><option>3</option></select>';
+    analyze(`<fieldset><legend>Ordena las etapas</legend><p>Planta adulta ${select}</p><p>Semilla ${select}</p><p>Germinacion ${select}</p></fieldset>`, (payload) => {
+      assert(payload.slots[0].label === 'Planta adulta', 'missing row context');
+      return mapping(payload,['3','1','2']);
+    });
+    assert([...fixture.querySelectorAll('select')].map((s) => s.value).join(',') === '3,1,2', 'wrong positions');
+  });
+  test('Moodle drag slots use groups and show manual placement with hidden overlay setting', () => {
+    analyze(`<fieldset class="que ddwtos"><div class="qtext">England <span class="drop group1"></span> Wales <span class="drop group1"></span></div><span class="draghome group1">London</span><span class="draghome group1">Cardiff</span><span class="draghome group2">Other</span><input type="hidden" value="original"></fieldset>`, (payload) => {
+      assert(payload.type === 'drag_slots' && payload.slots[0].options.length === 2, 'wrong group');
+      return mapping(payload,['choice-1','choice-2']);
+    }, '.drop');
+    assert(document.querySelector('#lol-assistant-overlay').textContent.includes('Espacio 2: Cardiff'), 'guidance hidden');
+    assert(fixture.querySelector('input').value === 'original', 'hidden answer changed');
+  });
+  test('nonreusable drag choice cannot fill two slots', () => {
+    analyze(`<fieldset class="que ddwtos">A <span class="drop"></span> B <span class="drop"></span><span class="draghome">London</span></fieldset>`, (payload) => mapping(payload,['choice-1','choice-1']));
+    assert([...fixture.querySelectorAll('.drop')].every((s) => !s.title), 'invalid guidance applied');
+  });
+  test('native HTML drag is accepted by drop handlers', () => {
+    analyze(`<fieldset>England <span data-drop-slot></span><span draggable="true">London</span></fieldset>`, (payload) => {
+      fixture.querySelector('[data-drop-slot]').addEventListener('drop', (event) => {
+        event.preventDefault(); event.currentTarget.textContent = event.dataTransfer.getData('text/plain');
+      });
+      return mapping(payload,['choice-1']);
+    });
+    assert(fixture.querySelector('[data-drop-slot]').textContent === 'London', 'drop failed');
+  });
+  test('radio and open answer still work', () => {
+    analyze('<fieldset><legend>Who uses a scythe?</legend><label><input type="radio" name="q">Kayn</label><label><input type="radio" name="q">Zed</label></fieldset>', () => ({answer:'Kayn',confidence:0.9}));
+    assert(fixture.querySelector('input').checked, 'radio failed');
+    analyze('<fieldset><legend>Who uses a scythe?</legend><input type="text"></fieldset>', () => ({answer:'Kayn',confidence:0.9}));
+    assert(fixture.querySelector('input').value === 'Kayn', 'open answer failed');
+  });
+  const writingHtml = `<fieldset class="que shortanswer"><div class="formulation"><div class="qtext">A short message on Twitter is called a ?????</div><div class="ablock"><label for="writing-answer">Answer:</label><input type="text" id="writing-answer" name="q:answer"></div><button>Check</button></div></fieldset>`;
+  test('Moodle writing ignores the Answer label and Check button and fires input/change', () => {
+    let events = [];
+    analyze(writingHtml, (payload) => {
+      assert(payload.type === 'open_text' && payload.options.length === 0,'writing was treated as multiple choice');
+      assert(payload.question === 'A short message on Twitter is called a ?????','question includes answer controls');
+      const field = fixture.querySelector('input');
+      field.addEventListener('input', () => events.push('input'));
+      field.addEventListener('change', () => events.push('change'));
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+      Object.defineProperty(field,'value',{get(){return descriptor.get.call(this);},set(){throw new Error('framework setter should not be used');}});
+      return {answer:'tweet',confidence:0.95};
+    }, 'input');
+    assert(fixture.querySelector('input').value === 'tweet','Moodle answer not filled');
+    assert(events.join(',') === 'input,change','missing form events');
+  });
+  test('Alt+N also fills a single writing answer', () => {
+    fixture.innerHTML = writingHtml;
+    nextResponse = () => ({answer:'tweet',confidence:0.95});
+    fixture.querySelector('.qtext').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));
+    document.dispatchEvent(new KeyboardEvent('keydown',{altKey:true,code:'KeyN',bubbles:true}));
+    assert(fixture.querySelector('input').value === 'tweet','Alt+N did not fill writing');
+    assert(document.getElementById('lol-assistant-overlay').textContent.includes('Paso 1/1: tweet'),'missing writing step status');
+  });
+  test('writing stays in the indicated question and preserves edits made while waiting', () => {
+    analyze(writingHtml.replace('</fieldset>', '</fieldset><fieldset class="que"><div class="qtext">Other question?</div><input type="text" value="untouched"></fieldset>'), () => ({answer:'tweet',confidence:0.9}), '.qtext');
+    assert(fixture.querySelectorAll('input')[1].value === 'untouched','changed another question');
+    analyze(writingHtml, () => {
+      fixture.querySelector('input').value = 'my edit';
+      return {answer:'tweet',confidence:0.9};
+    });
+    assert(fixture.querySelector('input').value === 'my edit','overwrote an edit');
+  });
+  test('area selection fills Moodle writing and textareas are supported', () => {
+    fixture.innerHTML = writingHtml;
+    nextResponse = () => ({answer:'tweet',confidence:0.9});
+    const rect = fixture.querySelector('fieldset').getBoundingClientRect();
+    document.dispatchEvent(new KeyboardEvent('keydown',{altKey:true,code:'KeyS',bubbles:true}));
+    document.dispatchEvent(new MouseEvent('mousedown',{clientX:rect.left+1,clientY:rect.top+1,bubbles:true}));
+    document.dispatchEvent(new MouseEvent('mouseup',{clientX:rect.right-1,clientY:rect.bottom-1,bubbles:true}));
+    assert(fixture.querySelector('input').value === 'tweet','area writing failed');
+    analyze('<fieldset class="que"><div class="qtext">Write a greeting.</div><label>Answer:</label><textarea></textarea><button>Check</button></fieldset>',()=>({answer:'Hello',confidence:0.9}));
+    assert(fixture.querySelector('textarea').value === 'Hello','textarea not filled');
+  });
+  test('readonly and disabled writing fields are left unchanged', () => {
+    for (const attribute of ['readonly','disabled']) {
+      analyze(writingHtml.replace('type="text"',`type="text" ${attribute}`),()=>({answer:'tweet',confidence:0.9}));
+      assert(fixture.querySelector('input').value === '',attribute+' field was changed');
+    }
+  });
+  document.getElementById('results').textContent = results.join('\n') + '\n' + (results.some((line) => line.startsWith('FAIL')) ? 'TESTS_FAILED' : 'ALL_TESTS_PASSED');
+</script>

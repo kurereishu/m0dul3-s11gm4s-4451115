@@ -1,0 +1,37 @@
+#lol-assistant-overlay {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483647;
+  width: min(360px, calc(100vw - 36px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid rgba(212, 175, 55, 0.75);
+  border-radius: 8px;
+  background: #101820;
+  color: #f8f3df;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.35;
+}
+
+#lol-assistant-overlay .lol-assistant-answer {
+  white-space: pre-line;
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#lol-assistant-overlay .lol-assistant-meta {
+  margin-top: 4px;
+  color: #c8b46c;
+  font-size: 12px;
+}
+
+#lol-assistant-overlay .lol-assistant-explanation {
+  margin-top: 8px;
+  color: #f0ead2;
+  font-size: 13px;
+}
+

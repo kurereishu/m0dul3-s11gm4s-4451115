@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prueba LoL Quiz Assistant</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f4f1e8;
+        color: #1f2933;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 0 20px;
+      }
+
+      fieldset {
+        margin-bottom: 20px;
+        border: 1px solid #c8b46c;
+        border-radius: 8px;
+        padding: 20px;
+        background: #ffffff;
+      }
+
+      legend {
+        padding: 0 8px;
+        font-weight: 700;
+      }
+
+      label {
+        display: block;
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid #d7dce2;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form>
+        <fieldset>
+          <legend>¿Que campeon de League of Legends usa una guadana?</legend>
+          <label><input type="radio" name="q1"> Zed</label>
+          <label><input type="radio" name="q1"> Kayn</label>
+          <label><input type="radio" name="q1"> Thresh</label>
+          <label><input type="radio" name="q1"> Aatrox</label>
+        </fieldset>
+        <fieldset>
+          <legend>¿Que campeona de Demacia usa magia de luz?</legend>
+          <label><input type="radio" name="q2"> Lux</label>
+          <label><input type="radio" name="q2"> Ashe</label>
+          <label><input type="radio" name="q2"> Jinx</label>
+          <label><input type="radio" name="q2"> Kayn</label>
+        </fieldset>
+        <fieldset>
+          <legend>¿Quien es conocido como el maestro de las sombras?</legend>
+          <label><input type="radio" name="q3"> Yasuo</label>
+          <label><input type="radio" name="q3"> Zed</label>
+          <label><input type="radio" name="q3"> Thresh</label>
+          <label><input type="radio" name="q3"> Aatrox</label>
+        </fieldset>
+        <fieldset>
+          <legend>¿Que campeon usa una linterna y cadenas?</legend>
+          <label><input type="radio" name="q4"> Thresh</label>
+          <label><input type="radio" name="q4"> Jinx</label>
+          <label><input type="radio" name="q4"> Ashe</label>
+          <label><input type="radio" name="q4"> Yasuo</label>
+        </fieldset>
+      </form>
+      <fieldset class="que" id="question-selects">
+        <legend>Completar con desplegables</legend>
+        <div class="qtext">Scotland, England and
+          <select><option value="">Selecciona...</option><option value="w">Wales</option><option value="ni">Northern Ireland</option></select>
+          together form
+          <select><option value="">Selecciona...</option><option value="uk">United Kingdom</option><option value="gb">Great Britain</option></select>.
+        </div>
+      </fieldset>
+      <fieldset class="que shortanswer" id="question-writing">
+        <legend>Respuesta escrita</legend>
+        <div class="qtext">A short message on Twitter is called a ?????</div>
+        <label for="writing-answer">Answer:</label>
+        <input type="text" id="writing-answer" name="writing-answer" style="width:90%;padding:10px">
+      </fieldset>
+      <fieldset class="que" id="question-order">
+        <legend>Ordena las etapas de una planta</legend>
+        <p>Planta adulta <select><option value="">Selecciona...</option><option>1</option><option>2</option><option>3</option></select></p>
+        <p>Semilla <select><option value="">Selecciona...</option><option>1</option><option>2</option><option>3</option></select></p>
+        <p>Germinacion <select><option value="">Selecciona...</option><option>1</option><option>2</option><option>3</option></select></p>
+      </fieldset>
+      <fieldset class="que" id="question-drag">
+        <legend>Arrastra cada capital a su pais</legend>
+        <p>England: <span data-drop-slot style="display:inline-block;min-width:100px;min-height:24px;border:1px solid #999"></span></p>
+        <p>Wales: <span data-drop-slot style="display:inline-block;min-width:100px;min-height:24px;border:1px solid #999"></span></p>
+        <span draggable="true">London</span> | <span draggable="true">Cardiff</span> | <span draggable="true">Glasgow</span>
+      </fieldset>
+      <script>
+        document.querySelectorAll('[draggable="true"]').forEach((element) => {
+          element.addEventListener('dragstart', (event) => event.dataTransfer.setData('text/plain', element.textContent));
+        });
+        document.querySelectorAll('[data-drop-slot]').forEach((element) => {
+          element.addEventListener('dragover', (event) => event.preventDefault());
+          element.addEventListener('drop', (event) => {
+            event.preventDefault();
+            element.textContent = event.dataTransfer.getData('text/plain');
+          });
+        });
+      </script>
+    </main>
+  </body>
+</html>
