@@ -23,6 +23,25 @@ sendRuntimeMessage({ type: "LOL_ASSISTANT_GET_SETTINGS" }, (response) => {
   if (response?.settings) settings = response.settings;
 });
 
+try {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+
+    if (changes.showOverlay) {
+      settings.showOverlay = Boolean(changes.showOverlay.newValue);
+      if (!settings.showOverlay) removeOverlay();
+    }
+    if (changes.showExplanation) {
+      settings.showExplanation = Boolean(changes.showExplanation.newValue);
+      if (!settings.showExplanation) {
+        document.querySelector("#lol-assistant-overlay .lol-assistant-explanation")?.remove();
+      }
+    }
+  });
+} catch (error) {
+  handleRuntimeFailure(error);
+}
+
 document.addEventListener(
   "mouseover",
   (event) => {
@@ -167,7 +186,6 @@ function runNextAnswer() {
         return;
       }
       if (session.next >= current.slots.length) {
-        showOverlay({ answer: `Pregunta completada: ${session.next}/${current.slots.length}.`, confidence: session.result.confidence, requiresManual: true });
         return;
       }
       const index = session.next;
@@ -201,9 +219,7 @@ function runNextAnswer() {
       session.manualIndex = application.requiresManual ? index : null;
       session.expected = session.targets.map((target) => structuredTargetValue(target, current.type));
       showOverlay({ ...application, requiresManual: true,
-        answer: `Paso ${index + 1}/${current.slots.length}: ${saved.text}\n` +
-          (application.requiresManual ? "Coloca esta respuesta y pulsa Alt + N." :
-            session.next < current.slots.length ? "Alt + N: siguiente respuesta." : "Pregunta completada.") });
+        answer: `Paso ${index + 1}/${current.slots.length}: ${saved.text}` });
     } catch {
       stepSession = null;
       showOverlay({ answer: "No se pudo completar este paso. Pulsa Alt + N para reintentar.", confidence: 0, requiresManual: true });
@@ -253,6 +269,8 @@ function collectQuestionPayload() {
   if (structured) return structured;
   const open = collectOpenPayload(block);
   if (open) return open;
+  if (block && isMoodleQuestionRoot(block)) return collectMoodlePayload(block);
+
   const text = readVisibleText(block || target);
   const options = extractOptions(block);
   const question = extractQuestion(text, options);
@@ -440,7 +458,7 @@ function looksLikeQuestionBlock(text) {
 }
 
 function showOverlay(result) {
-  if (!settings.showOverlay && !result?.requiresManual && !isProblemResult(result)) {
+  if (!settings.showOverlay) {
     removeOverlay();
     return;
   }
@@ -453,7 +471,6 @@ function showOverlay(result) {
   const explanation = settings.showExplanation ? `<div class="lol-assistant-explanation">${escapeHtml(result?.explanation || "")}</div>` : "";
   overlay.innerHTML = `
     <div class="lol-assistant-answer">${escapeHtml(result?.answer || "Sin respuesta")}</div>
-    <div class="lol-assistant-meta">Confianza: ${Math.round((result?.confidence || 0) * 100)}%</div>
     ${explanation}
   `;
 
@@ -463,11 +480,6 @@ function showOverlay(result) {
 
 function removeOverlay() {
   document.getElementById("lol-assistant-overlay")?.remove();
-}
-
-function isProblemResult(result) {
-  const answer = cleanText(result?.answer || "");
-  return !answer || /^no pude detectar|^error de comunicacion|^area demasiado pequena|^sin respuesta|^no encontre|^no se pudo/i.test(answer);
 }
 
 function cleanText(value) {
@@ -610,7 +622,7 @@ function analyzePayload(payload, emptyExplanation = "Intenta cubrir la pregunta 
     } else {
       const result = application || response?.result;
       showOverlay(singleStep && result?.confidence > 0 ? { ...result, requiresManual: true,
-        answer: `Paso 1/1: ${result.answer}\nPregunta completada.` } : result);
+        answer: `Paso 1/1: ${result.answer}` } : result);
     }
   });
 }

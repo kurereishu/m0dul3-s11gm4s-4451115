@@ -37,25 +37,25 @@ Gemini requiere Node.js y una clave de API de Gemini. La clave se introduce en e
 3. Cuando se solicite, pega tu `GEMINI_API_KEY`. Deja abierta esa ventana mientras uses Gemini.
 4. Comprueba que el servidor esté disponible en [http://localhost:8787/health](http://localhost:8787/health). La respuesta debe incluir `"ok": true`.
 
-También puedes iniciar el servidor en segundo plano con `start-gemini-background.cmd`, consultar sus registros con `show-gemini-log.cmd` y detenerlo con `stop-gemini-background.cmd`.
+También puedes iniciar el servidor en segundo plano abriendo `start-gemini-background.cmd`. El lanzador busca Node.js en el `PATH` y te pide la clave si no está configurada. Si no encuentra Node, puedes colocar `node.exe` dentro de una carpeta `runtime` junto al lanzador. Para consultar los registros, abre `show-gemini-log.cmd`; para detenerlo, abre `stop-gemini-background.cmd`.
 
 La extensión envía al servidor local el texto de la pregunta, las opciones disponibles y, cuando corresponda, los espacios y sus opciones. El servidor remite esa información a la API de Gemini usando tu clave. Si Gemini no está disponible, las preguntas sencillas pueden usar una pequeña base local incluida; los ejercicios con varios espacios necesitan Gemini.
 
 ## Usar la extensión
 
-1. Abre una página con una pregunta compatible.
-2. Pon el cursor sobre la pregunta o una de sus opciones, o enfoca el campo que quieres analizar.
-3. Usa el atajo adecuado:
+1. Abre una página con una pregunta compatible y pon el cursor sobre el enunciado o una de sus opciones. Para una pregunta de escritura, también puedes enfocar su campo.
+2. Usa el atajo que corresponda:
 
-   | Atajo | Acción |
-   | --- | --- |
-   | `Alt + L` | Analiza y completa la pregunta bajo el cursor o enfocada. |
-   | `Alt + S` | Selecciona un área: arrastra un rectángulo alrededor de una pregunta para analizarla. |
-   | `Alt + N` | En preguntas con varios espacios, analiza y completa el siguiente espacio. |
+   | Atajo | Dónde usarlo | Qué hace |
+   | --- | --- | --- |
+   | `Alt + L` | Sobre una pregunta o una de sus opciones; también con el campo de respuesta enfocado. | Analiza esa pregunta y aplica la respuesta. En preguntas con varios espacios, intenta completarlos todos. |
+   | `Alt + S` | Cuando hay varias preguntas juntas o `Alt + L` no identifica bien una. | Inicia la selección de área. Arrastra un rectángulo que incluya el enunciado y las opciones de una sola pregunta; al soltar, la analiza. |
+   | `Alt + N` | Sobre una pregunta con varios espacios, o con un campo de respuesta enfocado. | Analiza y completa un espacio por pulsación, en orden. Espera a que termine cada paso antes de pulsarlo otra vez. |
+   | `Ctrl + Shift + L` | En cualquier lugar de la pestaña de la pregunta, con el cursor sobre ella o con su campo enfocado. | Atajo de Edge para analizar la pregunta actual; funciona como alternativa a `Alt + L`. Si no está disponible, configúralo en `edge://extensions/shortcuts`. |
 
-También puedes hacer clic en el icono de la extensión y elegir **Analizar pestaña**. Para preguntas con varios espacios, `Alt + L` completa la pregunta entera; `Alt + N` avanza un espacio por pulsación. Espera a que termine cada paso antes de continuar.
+También puedes abrir el menú de la extensión y elegir **Analizar pestaña** para analizar la pregunta bajo el cursor o enfocada.
 
-En el menú de la extensión puedes activar **Mostrar resultado** y **Mostrar justificación**. Si la extensión no puede completar una respuesta automáticamente, puede mostrar una guía para que la coloques manualmente. En Moodle, espera a que termine el llenado antes de hacer clic o escribir; una acción tuya detiene el proceso. Revisa siempre la respuesta y envía o comprueba la actividad por tu cuenta.
+En el menú de la extensión, **Mostrar resultados y avisos** controla todas las tarjetas de la página, incluidos pasos, estados, errores y guías manuales. **Mostrar justificación** controla la explicación de la respuesta. Ambas opciones están desactivadas por defecto; con las dos desactivadas, la página no muestra avisos ni tarjetas. La extensión todavía puede aplicar las respuestas compatibles. En Moodle, espera a que termine el llenado antes de hacer clic o escribir; una acción tuya detiene el proceso. Revisa siempre la respuesta y envía o comprueba la actividad por tu cuenta.
 
 ## Solución de problemas
 
